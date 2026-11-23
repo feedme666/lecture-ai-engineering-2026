@@ -16,7 +16,8 @@ ROOT = Path(__file__).resolve().parent.parent
 RAG_SOURCE = ROOT / "data/rag_data/lectures.json"
 RAG_TREE = ROOT / "data/rag_data/tree.json"
 RAG_GRAPH = ROOT / "data/rag_data/graph.json"
-RAG_DB = Path(os.getenv("AIE_RAG_DB", str(ROOT / "data/rag_data/index.sqlite3")))
+RAG_DB = Path(os.getenv("AIE_RAG_DB", str(
+    ROOT / "data/rag_data/index.sqlite3")))
 RAG_DOCUMENT_IDS = ("lec01-main", "lec02-main", "lec03-main")
 RAG_TOP_K = 5
 GRAPH_START_K = 3

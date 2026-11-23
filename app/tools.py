@@ -5,6 +5,7 @@
 """
 
 import json
+from collections.abc import Callable
 from functools import cache
 from pathlib import Path
 
@@ -82,16 +83,33 @@ def get_lecture_summary(lecture: int) -> str:
 
 
 def search_materials(query: str) -> str:
-    """第1〜3回の本講義資料を検索し、関連ページの本文・タイトル・ページ番号を返す。
+    """第1〜3回の本講義資料を検索し、一致ページと同じ資料内の前後ページを返す。
 
+    retrieval_typeがmatchなら検索一致ページ、adjacentなら前後ページ。
     queryに調べたい内容を指定する。
     """
+    return _search_materials(query, include_adjacent=True)
+
+
+def make_search_materials_tool(include_adjacent: bool) -> Callable[[str], str]:
+    """前後ページの取得有無を固定した検索ツールを作る。"""
+    def search_materials(query: str) -> str:
+        """第1〜3回の本講義資料を検索し、関連ページの本文と引用情報を返す。"""
+        return _search_materials(query, include_adjacent)
+
+    return search_materials
+
+
+def _search_materials(query: str, include_adjacent: bool) -> str:
     from google.genai.errors import APIError
     import sqlite3
     from app.retrieval import search
 
     try:
-        return json.dumps({"results": search(query)}, ensure_ascii=False)
+        return json.dumps(
+            {"results": search(query, include_adjacent=include_adjacent)},
+            ensure_ascii=False,
+        )
     except (ValueError, FileNotFoundError, sqlite3.Error) as e:
         return json.dumps({"error": str(e), "results": []}, ensure_ascii=False)
     except APIError as e:

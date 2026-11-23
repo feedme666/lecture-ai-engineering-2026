@@ -124,7 +124,7 @@ def open_index(path: Path):
         db.close()
 
 
-def search(query: str) -> list[dict]:
+def _search_hits(query: str) -> list[dict]:
     """質問を埋め込み、近いページを最大RAG_TOP_K件返す。"""
     if not isinstance(query, str) or not query.strip():
         raise ValueError("検索語が空です。")
@@ -136,6 +136,46 @@ def search(query: str) -> list[dict]:
             FROM chunks ORDER BY distance, page_id LIMIT ?
         """, (sqlite_vec.serialize_float32(vector), RAG_TOP_K))
         return [dict(row) for row in rows]
+
+
+def search(query: str, *, include_adjacent: bool = True) -> list[dict]:
+    """近いページと、必要なら同じ資料内の前後1ページを重複なく返す。"""
+    hits = _search_hits(query)
+    if not include_adjacent:
+        return hits
+
+    pages_by_document = defaultdict(list)
+    positions = {}
+    for page in load_pages(RAG_SOURCE):
+        document_id = page["document_id"]
+        positions[(document_id, page["page_id"])] = len(pages_by_document[document_id])
+        pages_by_document[document_id].append(page)
+
+    hits_by_page = {(hit["document_id"], hit["page_id"]): hit for hit in hits}
+    seen = set()
+    results = []
+    for hit in hits:
+        key = (hit["document_id"], hit["page_id"])
+        page_index = positions.get(key)
+        if page_index is None:
+            if key not in seen:
+                results.append({**hit, "retrieval_type": "match"})
+                seen.add(key)
+            continue
+
+        document_pages = pages_by_document[hit["document_id"]]
+        for index in range(max(0, page_index - 1), min(len(document_pages), page_index + 2)):
+            page = document_pages[index]
+            page_key = (page["document_id"], page["page_id"])
+            if page_key in seen:
+                continue
+            seen.add(page_key)
+            match = hits_by_page.get(page_key)
+            if match:
+                results.append({**match, "retrieval_type": "match"})
+            else:
+                results.append({**page, "distance": None, "retrieval_type": "adjacent"})
+    return results
 
 
 def search_graph(query: str) -> dict:
@@ -151,7 +191,7 @@ def search_graph(query: str) -> dict:
             adjacent[a].add(b)
             adjacent[b].add(a)
 
-    seeds = [hit for hit in search(query) if hit["page_id"] in pages][:min(GRAPH_START_K, GRAPH_MAX_RESULTS)]
+    seeds = [hit for hit in _search_hits(query) if hit["page_id"] in pages][:min(GRAPH_START_K, GRAPH_MAX_RESULTS)]
     seed_ids = {seed["page_id"] for seed in seeds}
     results, candidates = [], {}
     for rank, seed in enumerate(seeds):
