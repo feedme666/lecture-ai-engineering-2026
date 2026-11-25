@@ -18,7 +18,20 @@
 
 <!-- 基礎・実装・発展のどれか1つに取り組めば完了です。 -->
 
-- 取り組んだレベル：基礎 / 実装 / 発展
-- やったこと：
+- 取り組んだレベル：発展
+- やったこと：普段使用しているOpenCodeのmcpのサーバーについて調べた。OpenCodeのdocumentsに書いてあったcontext7と、その接続方法について調べた。
 - 結果：
+  - 設定を書く場所： 各設定ファイル。優先順位は以下のとおり。下にいくほど優先される。
+    `~/.config/opencode/opencode.json`
+    `/home/user/projects/acme/opencode.json`
+    `/home/user/projects/acme/packages/web/opencode.json`
+    `/etc/opencode/opencode.json`
+
+  - コマンドで起動する書き方： "type" を "local"として、"command" に実行コマンドと引数を配列として記載する。演習では command と args が分かれていたが、OpenCodeでは一つの配列にまとめられている。
+  - URL で接続する書き方： "type" を "remote" とし、"url" に接続先を記載する。
+  - 有効になる範囲: プロジェクト単位で設定も可能であるし、グローバル設定も可能。
 - 気づき・疑問：
+  = Context7という、プログラミング関連のドキュメントを取得するためのMCPサーバーがあることを知った。
+  = Context7の場合、Remoteで設定する場合は type を remote として、url に https://mcp.context7.com/mcp を指定する。Localで設定する場合は type を local として、command に ["npx", "-y", "@upstash/context7-mcp", "--api-key", "YOUR_API_KEY"] と記載する。
+  = LocalではMCPサーバーをコマンドで起動し、Remoteでは既に稼働しているMCPサーバーにURLで接続するという仕組みは、演習と共通していた。
+  = Context7では、LocalでMCPサーバーを起動した場合でも、ドキュメントの取得には外部サービスとの通信が必要である。Local MCPであることと、すべての処理がローカルで完結することは異なると分かった。
