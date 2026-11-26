@@ -3,6 +3,8 @@
 使い方:
     uv run python -m app.agent "LoRAとQLoRAの違いは？"
     uv run python -m app.agent --trace "LoRAとQLoRAの違いは？"   # ツール呼び出しを表示
+    uv run python -m app.agent --adjacent-pages --trace "LoRAとQLoRAの違いは？"  # 前後ページを含める
+    uv run python -m app.agent --no-adjacent-pages --trace "LoRAとQLoRAの違いは？"  # 検索一致ページだけ
     uv run python -m app.agent --graph --trace "LoRAとQLoRAの違いは？"  # 検索からグラフをたどって回答
     uv run python -m app.agent --tree --trace "LoRAとQLoRAの違いは？"  # 目次をたどって回答
     uv run python -m app.agent --full-context --trace "LoRAとQLoRAの違いは？"  # 全資料を一度に渡す
@@ -182,8 +184,15 @@ def main() -> None:
     modes.add_argument("--graph", action="store_true", help="検索結果からグラフをたどり、候補ページを読んで答える")
     modes.add_argument("--tree", action="store_true", help="目次をたどり、必要なページを読んで答える")
     modes.add_argument("--full-context", action="store_true", help="検索せず、lectures.jsonの全資料を一度に渡す")
+    parser.add_argument(
+        "--adjacent-pages", action=argparse.BooleanOptionalAction, default=None,
+        help="通常検索で前後1ページを含める／除外する（既定: 含める）",
+    )
     parser.add_argument("--list-tools", action="store_true", help="モデルに見えるツール一覧を表示して終了する（APIキー不要）")
     args = parser.parse_args()
+
+    if args.adjacent_pages is not None and (args.mcp or args.graph or args.tree or args.full_context):
+        parser.error("--adjacent-pages / --no-adjacent-pages は通常検索でのみ指定できます")
 
     target = build_mcp_agent() if args.mcp else agent
     mode = nullcontext()
@@ -191,6 +200,8 @@ def main() -> None:
         mode = target.override(instructions=TREE_INSTRUCTIONS, tools=[tools.browse_tree])
     elif args.graph:
         mode = target.override(instructions=GRAPH_INSTRUCTIONS, tools=[tools.search_graph])
+    elif args.adjacent_pages is not None:
+        mode = target.override(tools=[tools.make_search_materials_tool(args.adjacent_pages)])
     with mode:
         if args.list_tools:
             if args.full_context:

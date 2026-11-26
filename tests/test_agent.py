@@ -5,13 +5,17 @@ TestModel は実際のLLMを呼ばない偽モデルで、登録されたツー�
 「ツールが登録され、呼ばれ、結果がモデルに戻るか」を確かめられる。
 """
 
+import importlib
 import json
+import sys
 
+import pytest
 from pydantic_ai import DeferredToolRequests
 from pydantic_ai.messages import ToolCallPart, ToolReturnPart
 from pydantic_ai.models.test import TestModel
 
 from app.agent import agent
+agent_module = importlib.import_module("app.agent")
 
 BASE_TOOLS = {"search_materials"}
 
@@ -46,3 +50,35 @@ def test_material_result_reaches_the_model(monkeypatch):
     returns = _parts(result, ToolReturnPart)
     assert returns and returns[0].tool_name == "search_materials"
     assert json.loads(returns[0].content)["results"] == [hit]
+
+
+@pytest.mark.parametrize(
+    ("flag", "expected"),
+    [("--adjacent-pages", True), ("--no-adjacent-pages", False)],
+)
+def test_cli_configures_adjacent_page_search(monkeypatch, capsys, flag, expected):
+    configured = []
+    created_tools = []
+    search_calls = []
+    original_make_tool = agent_module.tools.make_search_materials_tool
+
+    def recording_search(query, **kwargs):
+        search_calls.append((query, kwargs))
+        return []
+
+    def make_tool(include_adjacent):
+        configured.append(include_adjacent)
+        tool = original_make_tool(include_adjacent)
+        created_tools.append(tool)
+        return tool
+
+    monkeypatch.setattr("app.retrieval.search", recording_search)
+    monkeypatch.setattr(agent_module.tools, "make_search_materials_tool", make_tool)
+    monkeypatch.setattr(sys, "argv", ["app.agent", flag, "--list-tools"])
+
+    agent_module.main()
+
+    assert configured == [expected]
+    assert "search_materials" in capsys.readouterr().out
+    assert json.loads(created_tools[0]("質問")) == {"results": []}
+    assert search_calls == [("質問", {"include_adjacent": expected})]
